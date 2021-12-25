@@ -7,6 +7,11 @@ export STEAM_COMPAT_DATA_PATH=$(realpath "./prefix")
 #export PROTON_ENABLE_NVAPI=1
 mkdir -p "$STEAM_COMPAT_DATA_PATH"
 
+if [ ! -f "$STEAM_COMPAT_DATA_PATH/tracked_files" ]; then
+    echo " " > "$STEAM_COMPAT_DATA_PATH/tracked_files"
+fi
+
+
 PROTON_SCRIPT_CONFIG=./proton_script.conf
 PLAY_FILE=./play.sh
 
@@ -32,7 +37,7 @@ if [ -z "$PROTON_SCRIPT" ]; then
 fi
 
 select_command () {    
-    PROTON_COMMAND=$(zenity --width=400 --height=300 --list --title="Select Command" --column="Command" --column="Description" "selectproton" "Select proton version." "exe" "Windows executable. (.exe, .msi)" "mkplay" "Make play script." "mkdesktop" "Add to launcher. (Requires play script.)" "winecfg" "winecfg" "control" "Controller settings." "custom" "Custom command.")
+    PROTON_COMMAND=$(zenity --width=400 --height=300 --list --title="Select Command" --column="Command" --column="Description" "selectproton" "Select proton version." "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkplay" "Make play script." "mkdesktop" "Add to launcher. (Requires play script.)" "winecfg" "winecfg" "control" "Controller settings." "custom" "Custom command.")
 }
 
 if [ -z "$1" ]; then
@@ -113,6 +118,15 @@ Exec=bash -c 'cd "$(realpath ./)/" && ./run.sh'
 Icon=$ICON_FILE
 EOM
     select_command
+fi
+
+if [ "$PROTON_COMMAND" == "winetricks" ]; then
+
+export WINE=$(dirname "$PROTON_SCRIPT")/files/bin/wine64
+export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
+export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
+PROTON_COMMAND=
+winetricks --gui
 fi
 
 if [ -n "$PROTON_COMMAND" ]; then
