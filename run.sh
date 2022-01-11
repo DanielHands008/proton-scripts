@@ -1,14 +1,11 @@
 #!/bin/bash
 
-export STEAM_COMPAT_DATA_PATH=$(realpath "./prefix")
 #export PROTON_HIDE_NVIDIA_GPU=0
 #export VKD3D_CONFIG=dxr11
 #export PROTON_ENABLE_NVAPI=1
-mkdir -p "$STEAM_COMPAT_DATA_PATH"
 
-if [ ! -f "$STEAM_COMPAT_DATA_PATH/tracked_files" ]; then
-    echo " " > "$STEAM_COMPAT_DATA_PATH/tracked_files"
-fi
+
+
 
 CONFIG_FILE=./proton_config.conf
 PLAY_FILE=./play.sh
@@ -23,11 +20,22 @@ load_env_values () {
 }
 
 save_env_values () {
-    # First env use a single > to clear the file, then us double >> for each after.
-    echo PROTON_SCRIPT=$PROTON_SCRIPT > "$CONFIG_FILE"
-    echo STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH >> "$CONFIG_FILE"
-    echo GAME_DIR=$GAME_DIR >> "$CONFIG_FILE"
-    echo GAME_EXE=$GAME_EXE >> "$CONFIG_FILE"
+    rm "$CONFIG_FILE"
+    if [ ! -z "$PROTON_SCRIPT" ]; then
+        echo PROTON_SCRIPT=$PROTON_SCRIPT >> "$CONFIG_FILE"
+    fi
+    if [ ! -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
+        echo STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH >> "$CONFIG_FILE"
+    fi
+    if [ ! -z "$STEAM_COMPAT_DATA_PATH" ]; then
+        echo STEAM_COMPAT_DATA_PATH=$STEAM_COMPAT_DATA_PATH >> "$CONFIG_FILE"
+    fi
+    if [ ! -z "$GAME_DIR" ]; then
+        echo GAME_DIR=$GAME_DIR >> "$CONFIG_FILE"
+    fi
+    if [ ! -z "$GAME_EXE" ]; then
+        echo GAME_EXE=$GAME_EXE >> "$CONFIG_FILE"
+    fi
 }
 
 select_steam_path () {
@@ -77,6 +85,10 @@ run_command () {
         if [[ -z $GAME_DIR || ! -f $GAME_EXE ]]; then
             select_game_files
         fi
+
+        find "$(realpath "$STEAM_COMPAT_DATA_PATH/pfx")" -type f > "$STEAM_COMPAT_DATA_PATH/tracked_files"
+        find "$(realpath "$GAME_DIR")" -type f >> "$STEAM_COMPAT_DATA_PATH/tracked_files"
+
         cd "$GAME_DIR"
         PROTON_COMMAND="$GAME_EXE"
 
@@ -156,6 +168,17 @@ EOM
 }
 
 load_env_values
+
+if [[ -z "$STEAM_COMPAT_DATA_PATH" ]]; then
+    export STEAM_COMPAT_DATA_PATH=$(realpath "./prefix")
+    save_env_values
+fi
+
+mkdir -p "$STEAM_COMPAT_DATA_PATH"
+
+if [ ! -f "$STEAM_COMPAT_DATA_PATH/tracked_files" ]; then
+    echo " " > "$STEAM_COMPAT_DATA_PATH/tracked_files"
+fi
 
 # Get steam folder.
 if [[ ! -f "$STEAM_COMPAT_CLIENT_INSTALL_PATH/steam.sh" ]]; then
