@@ -14,8 +14,7 @@ CONFIG_FILE=./proton_config.conf
 PLAY_FILE=./play.sh
 
 load_env_values () {
-    while IFS= read -r line
-    do
+    while IFS= read -r line; do
         if [[ "$line" == *"="* ]]; then
             IFS='=' read -r env value <<< "$line"
             export $env="$value"
@@ -74,41 +73,41 @@ run_command () {
     echo $PROTON_COMMAND
 
     if [ "$PROTON_COMMAND" == "play" ]; then
-        
+
         if [[ -z $GAME_DIR || ! -f $GAME_EXE ]]; then
             select_game_files
         fi
         cd "$GAME_DIR"
         PROTON_COMMAND="$GAME_EXE"
 
-    # Select Steam path.
+        # Select Steam path.
     elif [ "$PROTON_COMMAND" == "steampath" ]; then
         PROTON_COMMAND=
         select_steam_path
         save_env_values
         select_command
 
-    # Select proton version.
+        # Select proton version.
     elif [ "$PROTON_COMMAND" == "selectproton" ]; then
         PROTON_COMMAND=
         select_proton_script
         select_command
 
-    # Select game files.
+        # Select game files.
     elif [ "$PROTON_COMMAND" == "gamefiles" ]; then
         PROTON_COMMAND=
         select_game_files
         select_command
 
-    # Run a windows exe in the prefix.
+        # Run a windows exe in the prefix.
     elif [ "$PROTON_COMMAND" == "exe" ]; then
         PROTON_COMMAND=$(zenity --file-selection --title="Select a File" --file-filter=""*.exe" "*.msi" "*.EXE" "*.MSI"")
 
-    # Run custom command.
+        # Run custom command.
     elif [ "$PROTON_COMMAND" == "custom" ]; then
         PROTON_COMMAND=$(zenity --entry --text="Command")
 
-    # Make desktop file.
+        # Make desktop file.
     elif [ "$PROTON_COMMAND" == "mkdesktop" ]; then
         DESKTOP_NAME=$(zenity --entry --text="Name")
         if [ -z "$DESKTOP_NAME" ]; then
@@ -119,7 +118,7 @@ run_command () {
         if [ -z "$DESKTOP_FILE" ]; then
             exit 0
         fi
-    
+
         cat > "$DESKTOP_FILE" <<- EOM
 [Desktop Entry]
 Version=1.1
@@ -138,7 +137,7 @@ Icon=$ICON_FILE
 EOM
         select_command
 
-    # Open winetricks in the current prefix.
+        # Open winetricks in the current prefix.
     elif [ "$PROTON_COMMAND" == "winetricks" ]; then
         export WINE=$(dirname "$PROTON_SCRIPT")/files/bin/wine64
         export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
