@@ -1,45 +1,48 @@
 #!/bin/bash
 
-#export PROTON_HIDE_NVIDIA_GPU=0
-#export VKD3D_CONFIG=dxr11
-#export PROTON_ENABLE_NVAPI=1
-
-
-
-
 CONFIG_FILE=./proton_config.conf
-PLAY_FILE=./play.sh
+
+LOADED_ENV=()
 
 load_env_values () {
     while IFS= read -r line; do
         if [[ "$line" == *"="* ]]; then
             IFS='=' read -r env value <<< "$line"
             export $env="$value"
+            LOADED_ENV+=($env)
         fi
     done < "$CONFIG_FILE"
+    for value in "${LOADED_ENV[@]}"
+    do
+        echo $value
+    done
 }
 
 save_env_values () {
     rm "$CONFIG_FILE"
-    if [ ! -z "$PROTON_SCRIPT" ]; then
-        echo PROTON_SCRIPT=$PROTON_SCRIPT >> "$CONFIG_FILE"
-    fi
-    if [ ! -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
-        echo STEAM_COMPAT_CLIENT_INSTALL_PATH=$STEAM_COMPAT_CLIENT_INSTALL_PATH >> "$CONFIG_FILE"
-    fi
-    if [ ! -z "$STEAM_COMPAT_DATA_PATH" ]; then
-        echo STEAM_COMPAT_DATA_PATH=$STEAM_COMPAT_DATA_PATH >> "$CONFIG_FILE"
-    fi
-    if [ ! -z "$GAME_DIR" ]; then
-        echo GAME_DIR=$GAME_DIR >> "$CONFIG_FILE"
-    fi
-    if [ ! -z "$GAME_EXE" ]; then
-        echo GAME_EXE=$GAME_EXE >> "$CONFIG_FILE"
+    for value in "${LOADED_ENV[@]}"
+    do
+        if [ ! -z "$value" ]; then
+            echo $value="${!value}" >> "$CONFIG_FILE"
+        fi
+    done
+}
+
+set_env () {
+    export $1="$2"
+    if [[ ! ${LOADED_ENV[*]} =~ "$1" ]]; then
+        if [ ! -z "$1" ]; then
+            LOADED_ENV+=($1)
+        fi
+    else
+        if [ -z "$2" ]; then
+            LOADED_ENV=( "${LOADED_ENV[@]/$1}" )
+        fi
     fi
 }
 
 select_steam_path () {
-    export STEAM_COMPAT_CLIENT_INSTALL_PATH=$(zenity --file-selection --title="Select steam folder." --directory --filename="$(realpath $HOME/.steam/steam)/")
+    set_env "STEAM_COMPAT_CLIENT_INSTALL_PATH" "$(zenity --file-selection --title="Select steam folder." --directory --filename="$(realpath $HOME/.steam/steam)/")"
     if [ -z "$STEAM_COMPAT_CLIENT_INSTALL_PATH" ]; then
         exit 0
     elif [[ ! -f "$STEAM_COMPAT_CLIENT_INSTALL_PATH/steam.sh" ]]; then
@@ -49,7 +52,7 @@ select_steam_path () {
 }
 
 select_proton_script () {
-    PROTON_SCRIPT=$(zenity --file-selection --title="Select proton script" --filename="$STEAM_COMPAT_CLIENT_INSTALL_PATH/steamapps/common/" --file-filter="proton")
+    set_env "PROTON_SCRIPT" "$(zenity --file-selection --title="Select proton script" --filename="$STEAM_COMPAT_CLIENT_INSTALL_PATH/steamapps/common/" --file-filter="proton")"
     if [ -z "$PROTON_SCRIPT" ]; then
         zenity --width=200 --info --text="No proton version selected."
         exit 0
@@ -59,12 +62,12 @@ select_proton_script () {
 
 select_game_files () {
     zenity --width=200 --info --text="Select game install folder."
-    GAME_DIR=$(zenity --file-selection --title="Select game install folder." --directory --filename="$(realpath ./)/")
+    set_env "GAME_DIR" "$(zenity --file-selection --title="Select game install folder." --directory --filename="$(realpath ./)/")"
     if [ -z "$GAME_DIR" ]; then
         exit 0
     fi
     zenity --width=200 --info --text="Select game exe."
-    GAME_EXE=$(zenity --file-selection --title="Select game exe." --filename="$GAME_DIR/")
+    set_env "GAME_EXE" "$(zenity --file-selection --title="Select game exe." --filename="$GAME_DIR/")"
     if [ -z "$GAME_EXE" ]; then
         exit 0
     fi
@@ -73,6 +76,9 @@ select_game_files () {
 
 select_command () {
     PROTON_COMMAND=$(zenity --width=400 --height=300 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "custom" "Custom command.")
+    if [ -z "$PROTON_COMMAND" ]; then
+        exit 0
+    fi
     run_command
 }
 
@@ -170,7 +176,7 @@ EOM
 load_env_values
 
 if [[ -z "$STEAM_COMPAT_DATA_PATH" ]]; then
-    export STEAM_COMPAT_DATA_PATH=$(realpath "./prefix")
+    set_env "STEAM_COMPAT_DATA_PATH" "$(realpath "./prefix")"
     save_env_values
 fi
 
@@ -186,7 +192,7 @@ if [[ ! -f "$STEAM_COMPAT_CLIENT_INSTALL_PATH/steam.sh" ]]; then
         zenity --width=200 --info --text="Select Steam folder. (Folder containing 'steam.sh')"
         select_steam_path
     else
-        export STEAM_COMPAT_CLIENT_INSTALL_PATH="$(realpath "$HOME/.local/share/Steam")"
+        set_env "STEAM_COMPAT_CLIENT_INSTALL_PATH" "$(realpath "$HOME/.local/share/Steam")"
     fi
     save_env_values
 fi
