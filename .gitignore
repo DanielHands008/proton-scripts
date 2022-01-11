@@ -1,4 +1,4 @@
 /prefix
 play.sh
-proton_script.conf
 *.desktop
+proton_config.conf
