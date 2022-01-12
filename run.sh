@@ -12,10 +12,6 @@ load_env_values () {
             LOADED_ENV+=($env)
         fi
     done < "$CONFIG_FILE"
-    for value in "${LOADED_ENV[@]}"
-    do
-        echo $value
-    done
 }
 
 save_env_values () {
@@ -75,7 +71,7 @@ select_game_files () {
 }
 
 select_command () {
-    PROTON_COMMAND=$(zenity --width=400 --height=300 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "custom" "Custom command.")
+    PROTON_COMMAND=$(zenity --width=400 --height=500 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "custom" "Custom command.")
     if [ -z "$PROTON_COMMAND" ]; then
         exit 0
     fi
@@ -157,7 +153,11 @@ EOM
 
         # Open winetricks in the current prefix.
     elif [ "$PROTON_COMMAND" == "winetricks" ]; then
-        export WINE=$(dirname "$PROTON_SCRIPT")/files/bin/wine64
+        if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
+            export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
+        else
+            export WINE="$(dirname "$PROTON_SCRIPT")/dist/bin/wine64"
+        fi
         export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
         export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
         PROTON_COMMAND=
