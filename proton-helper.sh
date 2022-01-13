@@ -4,6 +4,8 @@ CONFIG_FILE=./proton_config.conf
 
 LOADED_ENV=()
 
+PASSED_ARGUMENT=$1
+
 load_env_values () {
     while IFS= read -r line; do
         if [[ "$line" == *"="* ]]; then
@@ -78,6 +80,12 @@ select_command () {
     run_command
 }
 
+command_done () {
+    if [ "$PASSED_ARGUMENT" = "" ]; then
+        select_command
+    fi
+}
+
 create_prefix () {
     mkdir -p "$STEAM_COMPAT_DATA_PATH"
     # Are tracked files required?
@@ -104,32 +112,35 @@ run_command () {
         PROTON_COMMAND=
         select_steam_path
         save_env_values
-        select_command
+        command_done
 
         # Select proton version.
     elif [ "$PROTON_COMMAND" == "selectproton" ]; then
         PROTON_COMMAND=
         select_proton_script
-        select_command
+        command_done
 
         # Select game files.
     elif [ "$PROTON_COMMAND" == "gamefiles" ]; then
         PROTON_COMMAND=
         select_game_files
-        select_command
+        command_done
 
     elif [ "$PROTON_COMMAND" == "setprefix" ]; then
         PROTON_COMMAND=
         set_env "STEAM_COMPAT_DATA_PATH" "$(zenity --file-selection --title="Select prefix folder." --directory --filename="$(realpath ./)/")"
         save_env_values
+        command_done
 
         # Run a windows exe in the prefix.
     elif [ "$PROTON_COMMAND" == "exe" ]; then
         PROTON_COMMAND=$(zenity --file-selection --title="Select a File" --file-filter=""*.exe" "*.msi" "*.EXE" "*.MSI"")
+        command_done
 
         # Run custom command.
     elif [ "$PROTON_COMMAND" == "custom" ]; then
         PROTON_COMMAND=$(zenity --entry --text="Command")
+        command_done
 
         # Make desktop file.
     elif [ "$PROTON_COMMAND" == "mkdesktop" ]; then
@@ -158,7 +169,7 @@ Name=Proton Commands
 Exec=bash -c 'cd "$(realpath ./)/" && $0'
 Icon=$ICON_FILE
 EOM
-        select_command
+        command_done
 
         # Open winetricks in the current prefix.
     elif [ "$PROTON_COMMAND" == "winetricks" ]; then
@@ -172,7 +183,7 @@ EOM
         PROTON_COMMAND=
         create_prefix
         winetricks --gui
-        select_command
+        command_done
 
             # Reboot the current prefix.
     elif [ "$PROTON_COMMAND" == "reboot" ]; then
@@ -186,7 +197,7 @@ EOM
         PROTON_COMMAND=
         create_prefix
         $WINE reboot
-        select_command
+        command_done
     fi
 
     # Otherwise run the value of $PROTON_COMMAND in proton.
@@ -201,7 +212,13 @@ EOM
             "$PROTON_SCRIPT" run "$PROTON_COMMAND"
             read  -n 1 -p "Keep window open while app is running."
         fi
-        PROTON_COMMAND=
+
+        if [ "$PROTON_COMMAND" == "winecfg" ] || [ "$PROTON_COMMAND" == "control" ]; then
+            PROTON_COMMAND=
+            command_done
+        else
+            PROTON_COMMAND=
+        fi
     fi
 
 }
@@ -237,9 +254,9 @@ if [ -z "$PROTON_SCRIPT" ]; then
 fi
 
 # If no arguments were specified then show command selector.
-if [ -z "$1" ]; then
+if [ -z "$PASSED_ARGUMENT" ]; then
     select_command
 else
-    PROTON_COMMAND=$1
+    PROTON_COMMAND=$PASSED_ARGUMENT
     run_command
 fi
