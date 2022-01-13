@@ -71,11 +71,19 @@ select_game_files () {
 }
 
 select_command () {
-    PROTON_COMMAND=$(zenity --width=400 --height=500 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "custom" "Custom command.")
+    PROTON_COMMAND=$(zenity --width=400 --height=500 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "setprefix" "Select prefix location. (Default: ./prefix)" "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "reboot" "Reboot wine prefix." "custom" "Custom command.")
     if [ -z "$PROTON_COMMAND" ]; then
         exit 0
     fi
     run_command
+}
+
+create_prefix () {
+    mkdir -p "$STEAM_COMPAT_DATA_PATH"
+    # Are tracked files required?
+    echo "" > "$STEAM_COMPAT_DATA_PATH/tracked_files"
+    #find "$(realpath "$STEAM_COMPAT_DATA_PATH/pfx")" -type f > "$STEAM_COMPAT_DATA_PATH/tracked_files"
+    #find "$(realpath "$GAME_DIR")" -type f >> "$STEAM_COMPAT_DATA_PATH/tracked_files"
 }
 
 run_command () {
@@ -87,9 +95,6 @@ run_command () {
         if [[ -z $GAME_DIR || ! -f $GAME_EXE ]]; then
             select_game_files
         fi
-
-        find "$(realpath "$STEAM_COMPAT_DATA_PATH/pfx")" -type f > "$STEAM_COMPAT_DATA_PATH/tracked_files"
-        find "$(realpath "$GAME_DIR")" -type f >> "$STEAM_COMPAT_DATA_PATH/tracked_files"
 
         cd "$GAME_DIR"
         PROTON_COMMAND="$GAME_EXE"
@@ -112,6 +117,11 @@ run_command () {
         PROTON_COMMAND=
         select_game_files
         select_command
+
+    elif [ "$PROTON_COMMAND" == "setprefix" ]; then
+        PROTON_COMMAND=
+        set_env "STEAM_COMPAT_DATA_PATH" "$(zenity --file-selection --title="Select prefix folder." --directory --filename="$(realpath ./)/")"
+        save_env_values
 
         # Run a windows exe in the prefix.
     elif [ "$PROTON_COMMAND" == "exe" ]; then
@@ -139,14 +149,13 @@ Version=1.1
 Type=Application
 Name=$DESKTOP_NAME
 Icon=$ICON_FILE
-Exec=bash -c 'cd "$(realpath ./)/" && ./run.sh play'
-Actions=
+Exec=bash -c 'cd "$(realpath ./)/" && $0 play'
 Categories=X-GNOME-Other;
 Actions=settings;
 
 [Desktop Action settings]
 Name=Proton Commands
-Exec=bash -c 'cd "$(realpath ./)/" && ./run.sh'
+Exec=bash -c 'cd "$(realpath ./)/" && $0'
 Icon=$ICON_FILE
 EOM
         select_command
@@ -161,13 +170,37 @@ EOM
         export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
         export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
         PROTON_COMMAND=
+        create_prefix
         winetricks --gui
+        select_command
+
+            # Reboot the current prefix.
+    elif [ "$PROTON_COMMAND" == "reboot" ]; then
+        if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
+            export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
+        else
+            export WINE="$(dirname "$PROTON_SCRIPT")/dist/bin/wine64"
+        fi
+        export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
+        export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
+        PROTON_COMMAND=
+        create_prefix
+        $WINE reboot
         select_command
     fi
 
     # Otherwise run the value of $PROTON_COMMAND in proton.
     if [ -n "$PROTON_COMMAND" ]; then
-        "$PROTON_SCRIPT" runinprefix "$PROTON_COMMAND"
+        create_prefix
+        if  grep -q "runinprefix" "$PROTON_SCRIPT" ; then
+            "$PROTON_SCRIPT" runinprefix "$PROTON_COMMAND"
+        elif grep -q "waitforexitandrun" "$PROTON_SCRIPT" ; then
+            "$PROTON_SCRIPT" waitforexitandrun "$PROTON_COMMAND"
+            read  -n 1 -p "Keep window open while app is running."
+        else
+            "$PROTON_SCRIPT" run "$PROTON_COMMAND"
+            read  -n 1 -p "Keep window open while app is running."
+        fi
         PROTON_COMMAND=
     fi
 
@@ -180,7 +213,7 @@ if [[ -z "$STEAM_COMPAT_DATA_PATH" ]]; then
     save_env_values
 fi
 
-mkdir -p "$STEAM_COMPAT_DATA_PATH"
+
 
 if [ ! -f "$STEAM_COMPAT_DATA_PATH/tracked_files" ]; then
     echo " " > "$STEAM_COMPAT_DATA_PATH/tracked_files"
