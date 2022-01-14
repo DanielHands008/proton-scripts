@@ -6,6 +6,8 @@ LOADED_ENV=()
 
 PASSED_ARGUMENT=$1
 
+CLOSE_ON_COMPLEATION=0
+
 load_env_values () {
     while IFS= read -r line; do
         if [[ "$line" == *"="* ]]; then
@@ -80,12 +82,6 @@ select_command () {
     run_command
 }
 
-command_done () {
-    if [ "$PASSED_ARGUMENT" = "" ]; then
-        select_command
-    fi
-}
-
 create_prefix () {
     mkdir -p "$STEAM_COMPAT_DATA_PATH"
     # Are tracked files required?
@@ -112,35 +108,29 @@ run_command () {
         PROTON_COMMAND=
         select_steam_path
         save_env_values
-        command_done
 
         # Select proton version.
     elif [ "$PROTON_COMMAND" == "selectproton" ]; then
         PROTON_COMMAND=
         select_proton_script
-        command_done
 
         # Select game files.
     elif [ "$PROTON_COMMAND" == "gamefiles" ]; then
         PROTON_COMMAND=
         select_game_files
-        command_done
 
     elif [ "$PROTON_COMMAND" == "setprefix" ]; then
         PROTON_COMMAND=
         set_env "STEAM_COMPAT_DATA_PATH" "$(zenity --file-selection --title="Select prefix folder." --directory --filename="$(realpath ./)/")"
         save_env_values
-        command_done
 
         # Run a windows exe in the prefix.
     elif [ "$PROTON_COMMAND" == "exe" ]; then
         PROTON_COMMAND=$(zenity --file-selection --title="Select a File" --file-filter=""*.exe" "*.msi" "*.EXE" "*.MSI"")
-        command_done
 
         # Run custom command.
     elif [ "$PROTON_COMMAND" == "custom" ]; then
         PROTON_COMMAND=$(zenity --entry --text="Command")
-        command_done
 
         # Make desktop file.
     elif [ "$PROTON_COMMAND" == "mkdesktop" ]; then
@@ -169,7 +159,6 @@ Name=Proton Commands
 Exec=bash -c 'cd "$(realpath ./)/" && $0'
 Icon=$ICON_FILE
 EOM
-        command_done
 
         # Open winetricks in the current prefix.
     elif [ "$PROTON_COMMAND" == "winetricks" ]; then
@@ -183,9 +172,8 @@ EOM
         PROTON_COMMAND=
         create_prefix
         winetricks --gui
-        command_done
 
-            # Reboot the current prefix.
+        # Reboot the current prefix.
     elif [ "$PROTON_COMMAND" == "reboot" ]; then
         if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
             export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
@@ -197,12 +185,13 @@ EOM
         PROTON_COMMAND=
         create_prefix
         $WINE reboot
-        command_done
     fi
 
     # Otherwise run the value of $PROTON_COMMAND in proton.
     if [ -n "$PROTON_COMMAND" ]; then
         create_prefix
+
+        # Check which run commands are available.
         if  grep -q "runinprefix" "$PROTON_SCRIPT" ; then
             "$PROTON_SCRIPT" runinprefix "$PROTON_COMMAND"
         elif grep -q "waitforexitandrun" "$PROTON_SCRIPT" ; then
@@ -214,32 +203,31 @@ EOM
         fi
 
         if [ "$PROTON_COMMAND" == "winecfg" ] || [ "$PROTON_COMMAND" == "control" ]; then
-            PROTON_COMMAND=
-            command_done
+            CLOSE_ON_COMPLEATION=0
         else
-            PROTON_COMMAND=
+            CLOSE_ON_COMPLEATION=1
         fi
+        PROTON_COMMAND=
+    fi
+
+    if [ "$CLOSE_ON_COMPLEATION" == "0" ] && [ "$PASSED_ARGUMENT" = "" ]; then
+        select_command
     fi
 
 }
 
 load_env_values
 
+# Set default prefix location.
 if [[ -z "$STEAM_COMPAT_DATA_PATH" ]]; then
     set_env "STEAM_COMPAT_DATA_PATH" "$(realpath "./prefix")"
     save_env_values
 fi
 
-
-
-if [ ! -f "$STEAM_COMPAT_DATA_PATH/tracked_files" ]; then
-    echo " " > "$STEAM_COMPAT_DATA_PATH/tracked_files"
-fi
-
 # Get steam folder.
 if [[ ! -f "$STEAM_COMPAT_CLIENT_INSTALL_PATH/steam.sh" ]]; then
     if [[ ! -f $"$(realpath "$HOME/.local/share/Steam")/steam.sh" ]]; then
-        zenity --width=200 --info --text="Select Steam folder. (Folder containing 'steam.sh')"
+        zenity --width=200 --info --text="Select Steam folder."
         select_steam_path
     else
         set_env "STEAM_COMPAT_CLIENT_INSTALL_PATH" "$(realpath "$HOME/.local/share/Steam")"
