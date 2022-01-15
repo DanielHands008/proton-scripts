@@ -75,7 +75,7 @@ select_game_files () {
 }
 
 select_command () {
-    PROTON_COMMAND=$(zenity --width=400 --height=500 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "setprefix" "Select prefix location. (Default: ./prefix)" "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "reboot" "Reboot wine prefix." "custom" "Custom command.")
+    PROTON_COMMAND=$(zenity --width=450 --height=600 --list --title="Select Command" --column="Command" --column="Description" "play" "Play" "launchoptions" "Change launch options." "steampath" "Select Steam path." "selectproton" "Select proton version." "gamefiles" "Select game files." "setprefix" "Select prefix location. (Default: ./prefix)" "exe" "Windows executable. (.exe, .msi)" "winetricks" "Open winetricks." "mkdesktop" "Add to launcher." "winecfg" "Wine Configuration." "control" "Wine Control Panel." "reboot" "Reboot wine prefix." "custom" "Custom command.")
     if [ -z "$PROTON_COMMAND" ]; then
         exit 0
     fi
@@ -100,8 +100,19 @@ run_command () {
             select_game_files
         fi
 
+        PLAY_SELECTED=1
+        CLOSE_ON_COMPLEATION=1
         cd "$GAME_DIR"
         PROTON_COMMAND="$GAME_EXE"
+
+    elif [ "$PROTON_COMMAND" == "launchoptions" ]; then
+        PROTON_COMMAND=
+        NEW_COMMAND=$(zenity --width=450 --entry --text="Launch Options" --entry-text "$LAUNCH_OPTIONS")
+        if [[ "$?" == "0" ]] ; then
+            set_env "LAUNCH_OPTIONS" "$NEW_COMMAND"
+            save_env_values
+        fi
+
 
         # Select Steam path.
     elif [ "$PROTON_COMMAND" == "steampath" ]; then
@@ -162,12 +173,16 @@ EOM
 
         # Open winetricks in the current prefix.
     elif [ "$PROTON_COMMAND" == "winetricks" ]; then
-        if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
-            export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
+        if [ $USE_SYSTEM_WINE == 1 ]; then
+            export WINE=wine64
         else
-            export WINE="$(dirname "$PROTON_SCRIPT")/dist/bin/wine64"
+            if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
+                export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
+            else
+                export WINE="$(dirname "$PROTON_SCRIPT")/dist/bin/wine64"
+            fi
+            export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
         fi
-        export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
         export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
         PROTON_COMMAND=
         create_prefix
@@ -175,12 +190,16 @@ EOM
 
         # Reboot the current prefix.
     elif [ "$PROTON_COMMAND" == "reboot" ]; then
-        if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
-            export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
+        if [ "$USE_SYSTEM_WINE" == "1" ]; then
+            export WINE=wine64
         else
-            export WINE="$(dirname "$PROTON_SCRIPT")/dist/bin/wine64"
+            if [[ -f "$(dirname "$PROTON_SCRIPT")/files/bin/wine64" ]]; then
+                export WINE="$(dirname "$PROTON_SCRIPT")/files/bin/wine64"
+            else
+                export WINE="$(dirname "$PROTON_SCRIPT")/dist/bin/wine64"
+            fi
+            export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
         fi
-        export LD_LIBRARY_PATH=$(dirname "$PROTON_SCRIPT")/files/lib:$LD_LIBRARY/PATH
         export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
         PROTON_COMMAND=
         create_prefix
@@ -189,23 +208,42 @@ EOM
 
     # Otherwise run the value of $PROTON_COMMAND in proton.
     if [ -n "$PROTON_COMMAND" ]; then
+
         create_prefix
 
-        # Check which run commands are available.
-        if  grep -q "runinprefix" "$PROTON_SCRIPT" ; then
-            "$PROTON_SCRIPT" runinprefix "$PROTON_COMMAND"
-        elif grep -q "waitforexitandrun" "$PROTON_SCRIPT" ; then
-            "$PROTON_SCRIPT" waitforexitandrun "$PROTON_COMMAND"
-            read  -n 1 -p "Keep window open while app is running."
-        else
-            "$PROTON_SCRIPT" run "$PROTON_COMMAND"
-            read  -n 1 -p "Keep window open while app is running."
+        COMMAND_PREFIX= 
+        COMMAND_SUFFIX=
+        COMMAND_SPLITTER=%command%
+        if [ ! -z "$LAUNCH_OPTIONS" ]; then
+            if [[ "$LAUNCH_OPTIONS" == *"$COMMAND_SPLITTER"* ]]; then
+                COMMAND_SUFFIX=${LAUNCH_OPTIONS#*$COMMAND_SPLITTER}
+                COMMAND_PREFIX=${LAUNCH_OPTIONS%"$COMMAND_SPLITTER$COMMAND_SUFFIX"}
+            else
+                COMMAND_SUFFIX=$LAUNCH_OPTIONS
+            fi
         fi
 
-        if [ "$PROTON_COMMAND" == "winecfg" ] || [ "$PROTON_COMMAND" == "control" ]; then
-            CLOSE_ON_COMPLEATION=0
+        if [ "$USE_SYSTEM_WINE" == "1" ]; then
+            export WINE=wine64
+            export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
+            $COMMAND_PREFIX $WINE "$PROTON_COMMAND" $COMMAND_SUFFIX
         else
-            CLOSE_ON_COMPLEATION=1
+            # Check which run commands are available.
+            if  grep -q "runinprefix" "$PROTON_SCRIPT" ; then
+                $COMMAND_PREFIX "$PROTON_SCRIPT" runinprefix "$PROTON_COMMAND" $COMMAND_SUFFIX
+            elif grep -q "waitforexitandrun" "$PROTON_SCRIPT" ; then
+                $COMMAND_PREFIX "$PROTON_SCRIPT" waitforexitandrun "$PROTON_COMMAND" $COMMAND_SUFFIX
+                read  -n 1 -p "Keep window open while app is running."
+            else
+                $COMMAND_PREFIX "$PROTON_SCRIPT" run "$PROTON_COMMAND" $COMMAND_SUFFIX
+                read  -n 1 -p "Keep window open while app is running."
+            fi
+
+            if [ "$PROTON_COMMAND" == "winecfg" ] || [ "$PROTON_COMMAND" == "control" ]; then
+                CLOSE_ON_COMPLEATION=0
+            else
+                CLOSE_ON_COMPLEATION=1
+            fi
         fi
         PROTON_COMMAND=
     fi
